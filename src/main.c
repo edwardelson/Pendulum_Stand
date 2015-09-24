@@ -54,6 +54,8 @@ void task4Function(void const * argument);
 /* Main ----------------------------------------------------------------------*/
 int main(void)
 {
+	printf("test");
+
 	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
 	HAL_Init();
 
