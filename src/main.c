@@ -6,9 +6,9 @@
  *
  *	This is the codes to control electronics for thrust measurement device
  *	sensors and actuators:
- *	1. valve control circuit
- *	2. accelerometer
- *	3. distance sensor
+ *	1. accelerometer
+ *	2. distance sensor
+ *	3. valve control circuit
  *	4. TFT LCD
  *	5. SD Card
  *
@@ -31,13 +31,11 @@ UART_HandleTypeDef huart2;
 I2C_HandleTypeDef hi2c1;
 ADC_HandleTypeDef hadc1;
 
-osThreadId task1Thread; //blink red LED every 1 second
-osThreadId task2Thread; //wait for interrupt from blue switch
-osThreadId task3Thread; //ADC read
-osThreadId task4Thread; //valve control
-osSemaphoreId sem1Handle; //a binary semaphore
+osThreadId task1Thread; //LED blinking and UART transmission
+osThreadId task2Thread; //valve control circuit
+osThreadId task3Thread; //accelerometer
 
-uint8_t TMP006_Status = 0; //by default it is off
+uint8_t valve_on = 0;
 
 /* Private function prototypes -----------------------------------------------*/
 void Clock_Config();
@@ -49,7 +47,6 @@ static void MX_I2C1_Init(void);
 void task1Function(void const * argument);
 void task2Function(void const * argument);
 void task3Function(void const * argument);
-void task4Function(void const * argument);
 
 /* Main ----------------------------------------------------------------------*/
 int main(void)
@@ -68,7 +65,7 @@ int main(void)
 
 	/* Configure I2C Devices */
 
-	TMP006_Status = config_TMP006(&hi2c1);
+//	TMP006_Status = config_TMP006(&hi2c1);
 
 	/* Threads Creation */
 	osThreadDef(task1, task1Function, osPriorityNormal, 0, 128);
@@ -79,15 +76,6 @@ int main(void)
 
 	osThreadDef(task3, task3Function, osPriorityNormal, 0, 128);
 	task3Thread = osThreadCreate(osThread(task3), NULL);
-
-	osThreadDef(task4, task4Function, osPriorityNormal, 0, 128);
-	task4Thread = osThreadCreate(osThread(task4), NULL);
-
-
-	/* Semaphore Creation */
-	osSemaphoreDef(sem1);
-	sem1Handle = xSemaphoreCreateCounting(1, 1);//osSemaphoreCreate(osSemaphore(sem1), 2); //1 because binary semaphore
-	//osSemaphoreWait(sem1Handle, osWaitForever);
 
 	/* Start freeRTOS kernel */
 	osKernelStart();
@@ -232,90 +220,80 @@ void MX_I2C1_Init(void)
 }
 
 
-/* Task 1 : Blink LED every 1 second*/
+/* Task 1 : Find Accelerometer Reading*/
 void task1Function(void const * argument)
 {
-
+//
     while(1)
 	{
-		if (osSemaphoreWait(sem1Handle, osWaitForever) == osOK)
-		{
-
+//		if (osSemaphoreWait(sem1Handle, osWaitForever) == osOK)
+//		{
+//
 			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
-			//HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
-
-			osSemaphoreRelease(sem1Handle);
+//			//HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+//
+//			osSemaphoreRelease(sem1Handle);
 			osDelay(1000);
 		}
-	}
+//	}
 }
 
-/* Task 2: once switch is enabled, send UART data */
+/* Task 2: Valve Control */
 void task2Function (void const * argument)
 {
 	while(1)
 	{
-		if(!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) //when switch is pressed
-		{
-			osSemaphoreWait(sem1Handle, osWaitForever);
-
-			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
-
-			osDelay(500);
-			osSemaphoreRelease (sem1Handle);
-		}
-	}
-}
-
-/* Task 3 : Read ADC*/
-void task3Function(void const * argument)
-{
-	int adc = 0;
-
-    while(1)
-	{
-		if (osSemaphoreWait(sem1Handle, osWaitForever) == osOK)
-		{
-
-			//read adc value from PA0
-			HAL_ADC_Start(&hadc1);
-			if (HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY)== 0x00)
-			{
-				adc = HAL_ADC_GetValue(&hadc1);
-			}
-			HAL_ADC_Stop(&hadc1);
-
-			adc = read_TMP006(&hi2c1);
-
-			//UART Transmission
-			char str[15] = {0};
-			char *msg = str;
-			sprintf(str, "%d", adc);
-			strcat(&str, "\n\r"); //add newline
-			HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 0xFFFF);
-
-			osSemaphoreRelease(sem1Handle);
-			osDelay(500);
-		}
-	}
-}
-
-/* Task 4 : ON/OFF Valve*/
-void task4Function(void const * argument)
-{
-
-    while(1)
-	{
-		if (osSemaphoreWait(sem1Handle, osWaitForever) == osOK)
+		if((!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) && (valve_on == 0)) //when switch is pressed
 		{
 			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+			osDelay(70);
+			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
 
-			osSemaphoreRelease(sem1Handle);
+			valve_on = 1;
+		}
+		else if ((!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)))
+		{
+			valve_on = 0;
 			osDelay(3000);
 		}
+		else
+		{
+			osDelay(500);
+		}
+
 	}
 }
 
+/* Task 3 : Read Accelerometer*/
+void task3Function(void const * argument)
+{
+//	int accX, accY, accZ = 0;
+//
+//
+    while(1)
+	{
+//		//read adc value from PA0
+//		HAL_ADC_Start(&hadc1);
+//		if (HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY)== 0x00)
+//		{
+//			acc = HAL_ADC_GetValue(&hadc1);
+//		}
+//		HAL_ADC_Stop(&hadc1);
+//
+//		adc = read_TMP006(&hi2c1);
+//
+//		//UART Transmission
+//		char str[15] = {0};
+//		char *msg = str;
+//		sprintf(str, "%d", adc);
+//		strcat(&str, "\n\r"); //add newline
+//		HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 0xFFFF);
+//
+//		osSemaphoreRelease(sem1Handle);
+		osDelay(500);
+		}
+//	}
+}
 
 /* additional code from STM32 */
 #ifdef USE_FULL_ASSERT

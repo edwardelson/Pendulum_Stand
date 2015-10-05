@@ -4,12 +4,15 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
+../src/Devices/ADXL335.c \
 ../src/Devices/tmp006.c 
 
 OBJS += \
+./src/Devices/ADXL335.o \
 ./src/Devices/tmp006.o 
 
 C_DEPS += \
+./src/Devices/ADXL335.d \
 ./src/Devices/tmp006.d 
 
 
