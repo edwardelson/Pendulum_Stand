@@ -12,6 +12,8 @@
  *	4. TFT LCD
  *	5. SD Card
  *
+ *	For Queue Implementation reference:
+ *	https://www.keil.com/pack/doc/CMSIS/RTOS/html/group___c_m_s_i_s___r_t_o_s___message.html
  */
 
 #include "stm32f4xx_hal.h"
@@ -26,6 +28,8 @@
 #include "cmsis_os.h"
 #include "string.h"
 
+#define QUEUE_SIZE 2
+
 /* Private variables ---------------------------------------------------------*/
 UART_HandleTypeDef huart2;
 I2C_HandleTypeDef hi2c1;
@@ -35,7 +39,19 @@ osThreadId task1Thread; //LED blinking and UART transmission
 osThreadId task2Thread; //valve control circuit
 osThreadId task3Thread; //accelerometer
 
+typedef struct {
+	uint32_t data1;
+	uint32_t data2;
+	uint32_t data3;
+} data_queue;
+
 uint8_t valve_on = 0;
+
+/* Queue Declaration */
+osMessageQId osQueue;
+
+/* Memory Management for Structure */
+osPoolId q_pool;
 
 /* Private function prototypes -----------------------------------------------*/
 void Clock_Config();
@@ -76,6 +92,14 @@ int main(void)
 
 	osThreadDef(task3, task3Function, osPriorityNormal, 0, 128);
 	task3Thread = osThreadCreate(osThread(task3), NULL);
+
+	/* Create Pool */
+	osPoolDef(q_pool, 16, data_queue); // data_queue can keep 16 data maximum
+	q_pool = osPoolCreate(osPool(q_pool));
+
+	/* Create Queue */
+	osMessageQDef(osqueue, 16, data_queue);
+	osQueue = osMessageCreate (osMessageQ(osqueue), NULL);
 
 	/* Start freeRTOS kernel */
 	osKernelStart();
@@ -221,21 +245,34 @@ void MX_I2C1_Init(void)
 
 
 /* Task 1 : Find Accelerometer Reading*/
+/* for now is just led blinking and queue testing */
 void task1Function(void const * argument)
 {
-//
+	uint32_t voltage = 10;
+	uint32_t current = 100;
+	uint32_t counter = 1000;
+
+	data_queue *q_ptr; // pointer to data structure
+
     while(1)
 	{
-//		if (osSemaphoreWait(sem1Handle, osWaitForever) == osOK)
-//		{
-//
-			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
-//			//HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
-//
-//			osSemaphoreRelease(sem1Handle);
-			osDelay(1000);
-		}
-//	}
+    	// Toggle LED
+		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+
+		// Update Values of Voltage, Current and Counter
+		voltage++;
+		current++;
+		counter++;
+
+		// Write Voltage, Current and Counter to
+		q_ptr = osPoolAlloc(q_pool); //allocate memory out of the 16 available to keep this data
+		q_ptr->data1 = voltage;
+		q_ptr->data2 = current;
+		q_ptr->data3 = counter;
+		osMessagePut(osQueue, (uint32_t)q_ptr, osWaitForever);
+
+		osDelay(1000);
+	}
 }
 
 /* Task 2: Valve Control */
@@ -265,8 +302,11 @@ void task2Function (void const * argument)
 }
 
 /* Task 3 : Read Accelerometer*/
+/* For now is simply reading queue and print through UART */
 void task3Function(void const * argument)
 {
+	data_queue *qr_ptr;
+	osEvent evt;
 //	int accX, accY, accZ = 0;
 //
 //
@@ -281,18 +321,39 @@ void task3Function(void const * argument)
 //		HAL_ADC_Stop(&hadc1);
 //
 //		adc = read_TMP006(&hi2c1);
-//
-//		//UART Transmission
+
+    	evt = osMessageGet(osQueue, osWaitForever);
+
+    	//if there is message available in queue
+    	if (evt.status == osEventMessage)
+    	{
+    		qr_ptr = evt.value.p;
+
+			//UART Transmission
+			char str[15] = {0};
+			char *msg = str;
+
+			sprintf(str, "%d", qr_ptr->data1);
+//			sprintf(str, "%d", qr_ptr->data2);
+//			sprintf(str, "%d", qr_ptr->data3);
+			strcat(&str, "\n\r"); //add newline
+			HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 0xFFFF);
+
+    		osPoolFree(q_pool, qr_ptr); //free the memory allocated to message
+
+
+    	}
+
+//    	int adc = 1;
 //		char str[15] = {0};
-//		char *msg = str;
-//		sprintf(str, "%d", adc);
+//    	char *msg = str;
+//    	sprintf(str, "%d", adc);
 //		strcat(&str, "\n\r"); //add newline
 //		HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 0xFFFF);
-//
-//		osSemaphoreRelease(sem1Handle);
-		osDelay(500);
-		}
-//	}
+
+
+    	osDelay(500);
+	}
 }
 
 /* additional code from STM32 */
