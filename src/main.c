@@ -307,6 +307,10 @@ void task3Function(void const * argument)
 {
 	data_queue *qr_ptr;
 	osEvent evt;
+	uint32_t voltage;
+	uint32_t current;
+	uint32_t counter;
+
 //	int accX, accY, accZ = 0;
 //
 //
@@ -328,29 +332,17 @@ void task3Function(void const * argument)
     	if (evt.status == osEventMessage)
     	{
     		qr_ptr = evt.value.p;
-
-			//UART Transmission
-			char str[15] = {0};
-			char *msg = str;
-
-			sprintf(str, "%d", qr_ptr->data1);
-//			sprintf(str, "%d", qr_ptr->data2);
-//			sprintf(str, "%d", qr_ptr->data3);
-			strcat(&str, "\n\r"); //add newline
-			HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 0xFFFF);
-
+    		voltage = qr_ptr->data1;
+    		current = qr_ptr->data2;
+    		counter = qr_ptr->data3;
     		osPoolFree(q_pool, qr_ptr); //free the memory allocated to message
 
+			//UART Transmission
+			char data_transmit[30] = {0};
+			snprintf(data_transmit, sizeof(data_transmit), "%d,%d,%d\n\r", voltage, current, counter);
+			HAL_UART_Transmit(&huart2, (uint8_t*)data_transmit, strlen(data_transmit), 0xFFFF);
 
     	}
-
-//    	int adc = 1;
-//		char str[15] = {0};
-//    	char *msg = str;
-//    	sprintf(str, "%d", adc);
-//		strcat(&str, "\n\r"); //add newline
-//		HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), 0xFFFF);
-
 
     	osDelay(500);
 	}
