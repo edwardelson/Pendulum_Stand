@@ -28,30 +28,37 @@
 #include "cmsis_os.h"
 #include "string.h"
 
-#define QUEUE_SIZE 2
-
-/* Private variables ---------------------------------------------------------*/
-UART_HandleTypeDef huart2;
-I2C_HandleTypeDef hi2c1;
-ADC_HandleTypeDef hadc1;
-
-osThreadId task1Thread; //LED blinking and UART transmission
-osThreadId task2Thread; //valve control circuit
-osThreadId task3Thread; //accelerometer
-
+/* Data Structure Declarations ------------------------------------------------*/
 typedef struct {
 	uint32_t data1;
 	uint32_t data2;
 	uint32_t data3;
+	uint32_t data4;
 } data_queue;
 
+/* Constant Declarations ------------------------------------------------------*/
+#define task1_period 5000
+#define task2_period 300
+#define task3_period 500
+#define task4_period 1000
+
+/* Private Variable Declarations ---------------------------------------------*/
 uint8_t valve_on = 0;
 
-/* Queue Declaration */
-osMessageQId osQueue;
+/* OS and ARM Variable Declarations ------------------------------------------*/
+UART_HandleTypeDef huart2;
+I2C_HandleTypeDef hi2c1;
+ADC_HandleTypeDef hadc1;
 
-/* Memory Management for Structure */
-osPoolId q_pool;
+osThreadId task1Thread; //Accelerometer Reading
+osThreadId task2Thread; //valve control circuit
+osThreadId task3Thread; //read Queue and UART Transmission
+osThreadId task4Thread; //Distance Sensor Reading
+osMessageQId osQueue; // Queue Declaration
+osMessageQId distance_queue; // Queue Declaration
+osPoolId q_pool; // Memory Management for Structure
+osPoolId distance_pool; // Memory Management for Structure
+
 
 /* Private function prototypes -----------------------------------------------*/
 void Clock_Config();
@@ -63,6 +70,7 @@ static void MX_I2C1_Init(void);
 void task1Function(void const * argument);
 void task2Function(void const * argument);
 void task3Function(void const * argument);
+void task4Function(void const * argument);
 
 /* Main ----------------------------------------------------------------------*/
 int main(void)
@@ -93,18 +101,176 @@ int main(void)
 	osThreadDef(task3, task3Function, osPriorityNormal, 0, 128);
 	task3Thread = osThreadCreate(osThread(task3), NULL);
 
+	osThreadDef(task4, task4Function, osPriorityNormal, 0, 128);
+	task4Thread = osThreadCreate(osThread(task4), NULL);
+
 	/* Create Pool */
 	osPoolDef(q_pool, 16, data_queue); // data_queue can keep 16 data maximum
 	q_pool = osPoolCreate(osPool(q_pool));
+	osPoolDef(distance_pool, 16, uint32_t); // data_queue can keep 16 data maximum
+	distance_pool = osPoolCreate(osPool(distance_pool));
 
 	/* Create Queue */
-	osMessageQDef(osqueue, 16, data_queue);
-	osQueue = osMessageCreate (osMessageQ(osqueue), NULL);
+	osMessageQDef(osQueue, 16, data_queue);
+	osQueue = osMessageCreate (osMessageQ(osQueue), NULL);
+	osMessageQDef(distance_queue, 16, uint32_t);
+	distance_queue = osMessageCreate (osMessageQ(distance_queue), NULL);
+
 
 	/* Start freeRTOS kernel */
 	osKernelStart();
 	while (1);
 }
+
+/* Task 1 : Find Accelerometer Reading*/
+/* for now is just led blinking and queue testing */
+void task1Function(void const * argument)
+{
+	uint32_t voltage = 10;
+	uint32_t current = 100;
+	uint32_t counter = 1000;
+
+	data_queue *q_ptr; // pointer to data structure
+
+    while(1)
+	{
+    	// Toggle LED
+		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+
+		// Update Values of Voltage, Current and Counter
+		voltage++;
+		current++;
+		counter++;
+		//		//read adc value from PA0
+		//		HAL_ADC_Start(&hadc1);
+		//		if (HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY)== 0x00)
+		//		{
+		//			acc = HAL_ADC_GetValue(&hadc1);
+		//		}
+		//		HAL_ADC_Stop(&hadc1);
+		//
+		//		adc = read_TMP006(&hi2c1);
+
+
+		// Write Voltage, Current and Counter to
+		q_ptr = osPoolAlloc(q_pool); //allocate memory out of the 16 available to keep this data
+		q_ptr->data1 = voltage;
+		q_ptr->data2 = current;
+		q_ptr->data3 = counter;
+		osMessagePut(osQueue, (uint32_t)q_ptr, osWaitForever);
+
+		osDelay(task1_period);
+	}
+}
+
+/* Task 2: Valve Control */
+void task2Function (void const * argument)
+{
+	while(1)
+	{
+		if((!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) && (valve_on == 0)) //when switch is pressed
+		{
+			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+			osDelay(70);
+			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+
+			valve_on = 1;
+		}
+		else if ((!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)))
+		{
+			valve_on = 0;
+			osDelay(3000);
+		}
+		else
+		{
+			osDelay(500);
+		}
+
+	}
+}
+
+/* Task 3 : Read Queue and UART Transmission*/
+void task3Function(void const * argument)
+{
+	data_queue *qr_ptr;
+	uint32_t *distance_ptr;
+	osEvent evt;
+	osEvent distance_event;
+
+	uint32_t voltage;
+	uint32_t current;
+	uint32_t counter;
+	uint32_t distance;
+
+	char data_transmit[30] = {0};
+
+    while(1)
+	{
+    	//get the queue value from Queue Buffer
+    	evt = osMessageGet(osQueue, NULL);
+    	distance_event = osMessageGet(distance_queue, NULL);
+
+    	//if there is message available in osqueue
+    	if (evt.status == osEventMessage)
+    	{
+    		qr_ptr = evt.value.p;
+    		voltage = qr_ptr->data1;
+    		current = qr_ptr->data2;
+    		counter = qr_ptr->data3;
+    		osPoolFree(q_pool, qr_ptr); //free the memory allocated to message
+
+//			//UART Transmission
+//    		memset(data_transmit, '0', 30); // empty the array
+//			snprintf(data_transmit, sizeof(data_transmit), "%d,%d,%d\n\r", voltage, current, counter);
+//			HAL_UART_Transmit(&huart2, (uint8_t*)data_transmit, strlen(data_transmit), 0xFFFF);
+    	}
+
+    	//if there is message available in distance_queue
+    	if (distance_event.status == osEventMessage)
+    	{
+    		distance_ptr = distance_event.value.p;
+    		distance = *distance_ptr;
+    		osPoolFree(distance_pool, distance_ptr);
+
+//			//UART Transmission
+//    		memset(data_transmit, '0', 30);
+//			snprintf(data_transmit, sizeof(data_transmit), "%d\n\r", distance);
+//			HAL_UART_Transmit(&huart2, (uint8_t*)data_transmit, strlen(data_transmit), 0xFFFF);
+    	}
+
+		//UART Transmission
+		memset(data_transmit, '0', 30);
+		snprintf(data_transmit, sizeof(data_transmit), "%d,%d,%d,%d\n\r", voltage, current, counter, distance); //will send old values if the sensors have not updated it yet
+		HAL_UART_Transmit(&huart2, (uint8_t*)data_transmit, strlen(data_transmit), 0xFFFF);
+
+
+    	osDelay(task3_period);
+	}
+}
+
+/* Task 4 : Distance Sensor Reading*/
+//now just update distance value regularly
+void task4Function(void const * argument)
+{
+	uint32_t distance = 10000;
+	uint32_t *q_ptr; // pointer to data structure
+
+	while(1)
+	{
+
+		// Update Values of Voltage, Current and Counter
+		distance++;
+
+		// Write Voltage, Current and Counter to
+		q_ptr = osPoolAlloc(distance_pool); //allocate memory out of the 16 available to keep this data
+		*q_ptr = distance;
+		osMessagePut(distance_queue, (uint32_t)q_ptr, osWaitForever);
+
+		osDelay(task4_period);
+
+	}
+}
+
 
 /* System Clock Configuration
  * Taken from STM32F4CubeMX auto-generated files */
@@ -241,111 +407,6 @@ void MX_I2C1_Init(void)
   hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLED;
   HAL_I2C_Init(&hi2c1);
 
-}
-
-
-/* Task 1 : Find Accelerometer Reading*/
-/* for now is just led blinking and queue testing */
-void task1Function(void const * argument)
-{
-	uint32_t voltage = 10;
-	uint32_t current = 100;
-	uint32_t counter = 1000;
-
-	data_queue *q_ptr; // pointer to data structure
-
-    while(1)
-	{
-    	// Toggle LED
-		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
-
-		// Update Values of Voltage, Current and Counter
-		voltage++;
-		current++;
-		counter++;
-
-		// Write Voltage, Current and Counter to
-		q_ptr = osPoolAlloc(q_pool); //allocate memory out of the 16 available to keep this data
-		q_ptr->data1 = voltage;
-		q_ptr->data2 = current;
-		q_ptr->data3 = counter;
-		osMessagePut(osQueue, (uint32_t)q_ptr, osWaitForever);
-
-		osDelay(1000);
-	}
-}
-
-/* Task 2: Valve Control */
-void task2Function (void const * argument)
-{
-	while(1)
-	{
-		if((!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) && (valve_on == 0)) //when switch is pressed
-		{
-			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
-			osDelay(70);
-			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
-
-			valve_on = 1;
-		}
-		else if ((!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)))
-		{
-			valve_on = 0;
-			osDelay(3000);
-		}
-		else
-		{
-			osDelay(500);
-		}
-
-	}
-}
-
-/* Task 3 : Read Accelerometer*/
-/* For now is simply reading queue and print through UART */
-void task3Function(void const * argument)
-{
-	data_queue *qr_ptr;
-	osEvent evt;
-	uint32_t voltage;
-	uint32_t current;
-	uint32_t counter;
-
-//	int accX, accY, accZ = 0;
-//
-//
-    while(1)
-	{
-//		//read adc value from PA0
-//		HAL_ADC_Start(&hadc1);
-//		if (HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY)== 0x00)
-//		{
-//			acc = HAL_ADC_GetValue(&hadc1);
-//		}
-//		HAL_ADC_Stop(&hadc1);
-//
-//		adc = read_TMP006(&hi2c1);
-
-    	evt = osMessageGet(osQueue, osWaitForever);
-
-    	//if there is message available in queue
-    	if (evt.status == osEventMessage)
-    	{
-    		qr_ptr = evt.value.p;
-    		voltage = qr_ptr->data1;
-    		current = qr_ptr->data2;
-    		counter = qr_ptr->data3;
-    		osPoolFree(q_pool, qr_ptr); //free the memory allocated to message
-
-			//UART Transmission
-			char data_transmit[30] = {0};
-			snprintf(data_transmit, sizeof(data_transmit), "%d,%d,%d\n\r", voltage, current, counter);
-			HAL_UART_Transmit(&huart2, (uint8_t*)data_transmit, strlen(data_transmit), 0xFFFF);
-
-    	}
-
-    	osDelay(500);
-	}
 }
 
 /* additional code from STM32 */
