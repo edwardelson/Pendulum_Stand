@@ -58,7 +58,7 @@ osMessageQId osQueue; // Queue Declaration
 osMessageQId distance_queue; // Queue Declaration
 osPoolId q_pool; // Memory Management for Structure
 osPoolId distance_pool; // Memory Management for Structure
-
+osSemaphoreId sem1Handle; //a binary semaphore
 
 /* Private function prototypes -----------------------------------------------*/
 void Clock_Config();
@@ -87,10 +87,6 @@ int main(void)
 	MX_ADC1_Init();
 	MX_I2C1_Init();
 
-	/* Configure I2C Devices */
-
-//	TMP006_Status = config_TMP006(&hi2c1);
-
 	/* Threads Creation */
 	osThreadDef(task1, task1Function, osPriorityNormal, 0, 128);
 	task1Thread = osThreadCreate(osThread(task1), NULL);
@@ -116,6 +112,10 @@ int main(void)
 	osMessageQDef(distance_queue, 16, uint32_t);
 	distance_queue = osMessageCreate (osMessageQ(distance_queue), NULL);
 
+	/* Semaphore Creation */
+	osSemaphoreDef(sem1);
+	sem1Handle = xSemaphoreCreateCounting(1, 1);
+	osSemaphoreWait(sem1Handle, osWaitForever);
 
 	/* Start freeRTOS kernel */
 	osKernelStart();
@@ -135,7 +135,7 @@ void task1Function(void const * argument)
     while(1)
 	{
     	// Toggle LED
-		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+		//HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
 
 		// Update Values of Voltage, Current and Counter
 		voltage++;
@@ -168,23 +168,31 @@ void task2Function (void const * argument)
 {
 	while(1)
 	{
-		if((!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) && (valve_on == 0)) //when switch is pressed
+		if (osSemaphoreWait(sem1Handle, osWaitForever) == osOK)
 		{
-			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
-			osDelay(70);
-			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+			osSemaphoreRelease(sem1Handle);
+		}
 
-			valve_on = 1;
-		}
-		else if ((!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)))
-		{
-			valve_on = 0;
-			osDelay(3000);
-		}
-		else
-		{
-			osDelay(500);
-		}
+		osDelay(1000);
+
+//		if((!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) && (valve_on == 0)) //when switch is pressed
+//		{
+//			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+//			osDelay(70);
+//			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+//
+//			valve_on = 1;
+//		}
+//		else if ((!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)))
+//		{
+//			valve_on = 0;
+//			osDelay(3000);
+//		}
+//		else
+//		{
+//			osDelay(500);
+//		}
 
 	}
 }
@@ -316,7 +324,7 @@ void MX_GPIO_Init(void)
 
 	  /*Configure GPIO pin : PC13 */
 	  GPIO_InitStruct.Pin = GPIO_PIN_13;
-	  GPIO_InitStruct.Mode = GPIO_MODE_EVT_RISING;
+	  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
 	  GPIO_InitStruct.Pull = GPIO_NOPULL;
 	  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
@@ -327,6 +335,11 @@ void MX_GPIO_Init(void)
 	  GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
 	  GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
 	  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+	  /* EXTI interrupt init*/
+	  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
+	  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+
 
 	  /*Configure GPIO pins : PA5 PA6 */
 	  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6;

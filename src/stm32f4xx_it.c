@@ -35,7 +35,8 @@
 #include "stm32f4xx.h"
 #include "stm32f4xx_it.h"
 #include "cmsis_os.h"
-
+//#include "main.c"
+osSemaphoreId sem1Handle;
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
@@ -70,6 +71,18 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /* USER CODE BEGIN 1 */
+void EXTI15_10_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI15_10_IRQn 0 */
+	//HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+	osSemaphoreRelease(sem1Handle);
+  /* USER CODE END EXTI15_10_IRQn 0 */
 
+	HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13);
+
+	/* USER CODE BEGIN EXTI15_10_IRQn 1 */
+
+  /* USER CODE END EXTI15_10_IRQn 1 */
+}
 /* USER CODE END 1 */
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
