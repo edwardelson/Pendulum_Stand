@@ -35,10 +35,10 @@
 #include "stm32f4xx.h"
 #include "stm32f4xx_it.h"
 #include "cmsis_os.h"
-//#include "main.c"
-osSemaphoreId sem1Handle;
-/* USER CODE BEGIN 0 */
 
+/* USER CODE BEGIN 0 */
+osPoolId valve_pool;
+osMessageQId valve_queue;
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
@@ -74,8 +74,14 @@ void SysTick_Handler(void)
 void EXTI15_10_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI15_10_IRQn 0 */
-	//HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
-	osSemaphoreRelease(sem1Handle);
+
+	uint32_t *q_ptr; // pointer to data structure
+	uint32_t valve_enable = 1;
+
+	q_ptr = osPoolAlloc(valve_pool); //allocate memory out of the 16 available to keep this data
+	*q_ptr = valve_enable;
+	osMessagePut(valve_queue, (uint32_t)q_ptr, osWaitForever);
+
   /* USER CODE END EXTI15_10_IRQn 0 */
 
 	HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13);

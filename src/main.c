@@ -38,12 +38,12 @@ typedef struct {
 
 /* Constant Declarations ------------------------------------------------------*/
 #define task1_period 5000
-#define task2_period 300
+#define task2_period 100
 #define task3_period 500
 #define task4_period 1000
+#define valve_delay_time 30
 
 /* Private Variable Declarations ---------------------------------------------*/
-uint8_t valve_on = 0;
 
 /* OS and ARM Variable Declarations ------------------------------------------*/
 UART_HandleTypeDef huart2;
@@ -56,9 +56,10 @@ osThreadId task3Thread; //read Queue and UART Transmission
 osThreadId task4Thread; //Distance Sensor Reading
 osMessageQId osQueue; // Queue Declaration
 osMessageQId distance_queue; // Queue Declaration
+extern osMessageQId valve_queue; // Queue Declaration
 osPoolId q_pool; // Memory Management for Structure
 osPoolId distance_pool; // Memory Management for Structure
-osSemaphoreId sem1Handle; //a binary semaphore
+extern osPoolId valve_pool; // Memory Management for Structure
 
 /* Private function prototypes -----------------------------------------------*/
 void Clock_Config();
@@ -105,17 +106,16 @@ int main(void)
 	q_pool = osPoolCreate(osPool(q_pool));
 	osPoolDef(distance_pool, 16, uint32_t); // data_queue can keep 16 data maximum
 	distance_pool = osPoolCreate(osPool(distance_pool));
+	osPoolDef(valve_pool, 2, uint32_t); // data_queue can keep 16 data maximum
+	valve_pool = osPoolCreate(osPool(valve_pool));
 
 	/* Create Queue */
 	osMessageQDef(osQueue, 16, data_queue);
 	osQueue = osMessageCreate (osMessageQ(osQueue), NULL);
 	osMessageQDef(distance_queue, 16, uint32_t);
 	distance_queue = osMessageCreate (osMessageQ(distance_queue), NULL);
-
-	/* Semaphore Creation */
-	osSemaphoreDef(sem1);
-	sem1Handle = xSemaphoreCreateCounting(1, 1);
-	osSemaphoreWait(sem1Handle, osWaitForever);
+	osMessageQDef(valve_queue, 2, uint32_t);
+	valve_queue = osMessageCreate (osMessageQ(valve_queue), NULL);
 
 	/* Start freeRTOS kernel */
 	osKernelStart();
@@ -135,7 +135,7 @@ void task1Function(void const * argument)
     while(1)
 	{
     	// Toggle LED
-		//HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
 
 		// Update Values of Voltage, Current and Counter
 		voltage++;
@@ -166,33 +166,29 @@ void task1Function(void const * argument)
 /* Task 2: Valve Control -------------------------------------------------------------------- */
 void task2Function (void const * argument)
 {
+	uint32_t *valve_ptr;
+	osEvent valve_event;
+	uint32_t valve_enable;
+
 	while(1)
 	{
-		if (osSemaphoreWait(sem1Handle, osWaitForever) == osOK)
+		valve_event = osMessageGet(valve_queue, NULL);
+
+		if (valve_event.status == osEventMessage)
 		{
-			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
-			osSemaphoreRelease(sem1Handle);
+    		valve_ptr = valve_event.value.p;
+    		valve_enable = *valve_ptr;
+    		osPoolFree(valve_pool, valve_ptr);
+
+    		if (valve_enable == 1)
+    		{
+    			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5); // HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+    			HAL_Delay(valve_delay_time);
+    			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5); // HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+    		}
 		}
 
-		osDelay(1000);
-
-//		if((!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) && (valve_on == 0)) //when switch is pressed
-//		{
-//			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
-//			osDelay(70);
-//			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
-//
-//			valve_on = 1;
-//		}
-//		else if ((!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)))
-//		{
-//			valve_on = 0;
-//			osDelay(3000);
-//		}
-//		else
-//		{
-//			osDelay(500);
-//		}
+		osDelay(task2_period);
 
 	}
 }
@@ -324,7 +320,7 @@ void MX_GPIO_Init(void)
 
 	  /*Configure GPIO pin : PC13 */
 	  GPIO_InitStruct.Pin = GPIO_PIN_13;
-	  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+	  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
 	  GPIO_InitStruct.Pull = GPIO_NOPULL;
 	  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
