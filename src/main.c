@@ -122,7 +122,7 @@ int main(void)
 	while (1);
 }
 
-/* Task 1 : Find Accelerometer Reading*/
+/* Task 1 : Find Accelerometer Reading----------------------------------------------------*/
 /* for now is just led blinking and queue testing */
 void task1Function(void const * argument)
 {
@@ -163,7 +163,7 @@ void task1Function(void const * argument)
 	}
 }
 
-/* Task 2: Valve Control */
+/* Task 2: Valve Control -------------------------------------------------------------------- */
 void task2Function (void const * argument)
 {
 	while(1)
@@ -189,7 +189,7 @@ void task2Function (void const * argument)
 	}
 }
 
-/* Task 3 : Read Queue and UART Transmission*/
+/* Task 3 : Read Queue and UART Transmission ---------------------------------------------------*/
 void task3Function(void const * argument)
 {
 	data_queue *qr_ptr;
@@ -218,11 +218,6 @@ void task3Function(void const * argument)
     		current = qr_ptr->data2;
     		counter = qr_ptr->data3;
     		osPoolFree(q_pool, qr_ptr); //free the memory allocated to message
-
-//			//UART Transmission
-//    		memset(data_transmit, '0', 30); // empty the array
-//			snprintf(data_transmit, sizeof(data_transmit), "%d,%d,%d\n\r", voltage, current, counter);
-//			HAL_UART_Transmit(&huart2, (uint8_t*)data_transmit, strlen(data_transmit), 0xFFFF);
     	}
 
     	//if there is message available in distance_queue
@@ -231,11 +226,6 @@ void task3Function(void const * argument)
     		distance_ptr = distance_event.value.p;
     		distance = *distance_ptr;
     		osPoolFree(distance_pool, distance_ptr);
-
-//			//UART Transmission
-//    		memset(data_transmit, '0', 30);
-//			snprintf(data_transmit, sizeof(data_transmit), "%d\n\r", distance);
-//			HAL_UART_Transmit(&huart2, (uint8_t*)data_transmit, strlen(data_transmit), 0xFFFF);
     	}
 
 		//UART Transmission
@@ -248,7 +238,7 @@ void task3Function(void const * argument)
 	}
 }
 
-/* Task 4 : Distance Sensor Reading*/
+/* Task 4 : Distance Sensor Reading -------------------------------------------------------------*/
 //now just update distance value regularly
 void task4Function(void const * argument)
 {
@@ -272,7 +262,7 @@ void task4Function(void const * argument)
 }
 
 
-/* System Clock Configuration
+/* System Clock Configuration --------------------------------------------------------------------
  * Taken from STM32F4CubeMX auto-generated files */
 void Clock_Config()
 {
@@ -307,7 +297,7 @@ void Clock_Config()
 
 }
 
-/* GPIO configuration */
+/* GPIO configuration --------------------------------------------------------------------*/
 void MX_GPIO_Init(void)
 {
 	  GPIO_InitTypeDef GPIO_InitStruct;
@@ -346,7 +336,7 @@ void MX_GPIO_Init(void)
 	  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 }
 
-/* USART2 init function */
+/* USART2 init function -------------------------------------------------------------------- */
 void MX_USART2_UART_Init(void)
 {
 
@@ -362,7 +352,7 @@ void MX_USART2_UART_Init(void)
 
 }
 
-/* ADC1 init function */
+/* ADC1 init function --------------------------------------------------------------------*/
 void MX_ADC1_Init(void)
 {
 
@@ -392,7 +382,7 @@ void MX_ADC1_Init(void)
 
 }
 
-/* I2C1 init function */
+/* I2C1 init function --------------------------------------------------------------------*/
 void MX_I2C1_Init(void)
 {
 
