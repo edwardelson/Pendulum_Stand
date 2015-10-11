@@ -9,8 +9,6 @@
  *	1. accelerometer
  *	2. distance sensor
  *	3. valve control circuit
- *	4. TFT LCD
- *	5. SD Card
  *
  *	For Queue Implementation reference:
  *	https://www.keil.com/pack/doc/CMSIS/RTOS/html/group___c_m_s_i_s___r_t_o_s___message.html
@@ -149,7 +147,6 @@ void task1Function(void const * argument)
 		//		}
 		//		HAL_ADC_Stop(&hadc1);
 		//
-		//		adc = read_TMP006(&hi2c1);
 
 
 		// Write Voltage, Current and Counter to
@@ -182,9 +179,9 @@ void task2Function (void const * argument)
 
     		if (valve_enable == 1)
     		{
-    			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5); // HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+    			/* HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);*/ HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
     			HAL_Delay(valve_delay_time);
-    			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5); // HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+    			/* HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);*/ HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
     		}
 		}
 

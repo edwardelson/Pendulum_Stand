@@ -344,6 +344,7 @@
 	<storageModule moduleId="refreshScope" versionNumber="2">
 		<configuration configurationName="Debug">
 			<resource resourceType="PROJECT" workspacePath="/stm32-nucleof4-freertos"/>
+			<resource resourceType="PROJECT" workspacePath="/Pendulum_Stand"/>
 		</configuration>
 		<configuration configurationName="Release">
 			<resource resourceType="PROJECT" workspacePath="/stm32-nucleof4-freertos"/>
