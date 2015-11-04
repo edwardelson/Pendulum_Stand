@@ -35,18 +35,21 @@ typedef struct {
 } data_queue;
 
 /* Constant Declarations ------------------------------------------------------*/
-#define task1_period 5000
-#define task2_period 100
-#define task3_period 500
-#define task4_period 1000
-#define valve_delay_time 30
+#define task1_period 20
+#define task2_period 20
+#define task3_period 40
+#define task4_period 20
+#define valve_delay_time 2000
 
 /* Private Variable Declarations ---------------------------------------------*/
+uint16_t encoder = 0;
 
 /* OS and ARM Variable Declarations ------------------------------------------*/
 UART_HandleTypeDef huart2;
 I2C_HandleTypeDef hi2c1;
 ADC_HandleTypeDef hadc1;
+SPI_HandleTypeDef hspi2;
+UART_HandleTypeDef huart6;
 
 osThreadId task1Thread; //Accelerometer Reading
 osThreadId task2Thread; //valve control circuit
@@ -63,13 +66,18 @@ extern osPoolId valve_pool; // Memory Management for Structure
 void Clock_Config();
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_SPI2_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
+static void MX_USART6_UART_Init(void);
 
 void task1Function(void const * argument);
 void task2Function(void const * argument);
 void task3Function(void const * argument);
 void task4Function(void const * argument);
+
+uint16_t read_encoder(void);
+void encoder_init(void);
 
 /* Main ----------------------------------------------------------------------*/
 int main(void)
@@ -84,7 +92,12 @@ int main(void)
 	MX_GPIO_Init();
 	MX_USART2_UART_Init();
 	MX_ADC1_Init();
+	MX_SPI2_Init();
 	MX_I2C1_Init();
+    MX_USART6_UART_Init();
+
+
+	encoder_init();
 
 	/* Threads Creation */
 	osThreadDef(task1, task1Function, osPriorityNormal, 0, 128);
@@ -134,6 +147,8 @@ void task1Function(void const * argument)
 	{
     	// Toggle LED
 		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+
+		//HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, 1);
 
 		// Update Values of Voltage, Current and Counter
 		voltage++;
@@ -211,7 +226,7 @@ void task3Function(void const * argument)
     	evt = osMessageGet(osQueue, NULL);
     	distance_event = osMessageGet(distance_queue, NULL);
 
-    	//if there is message available in osqueue
+    	//if there is message available in os queue
     	if (evt.status == osEventMessage)
     	{
     		qr_ptr = evt.value.p;
@@ -231,35 +246,86 @@ void task3Function(void const * argument)
 
 		//UART Transmission
 		memset(data_transmit, '0', 30);
-		snprintf(data_transmit, sizeof(data_transmit), "%d,%d,%d,%d\n\r", voltage, current, counter, distance); //will send old values if the sensors have not updated it yet
-		HAL_UART_Transmit(&huart2, (uint8_t*)data_transmit, strlen(data_transmit), 0xFFFF);
+//		snprintf(data_transmit, sizeof(data_transmit), "%d,%d,%d,%d\n\r", voltage, current, counter, distance); //will send old values if the sensors have not updated it yet
 
+		snprintf(data_transmit, sizeof(data_transmit), "%d\n\r", distance); //will send old values if the sensors have not updated it yet
+
+//		snprintf(data_transmit, sizeof(data_transmit), "TESTING"); //will send old values if the sensors have not updated it yet
+
+
+		HAL_UART_Transmit(&huart2, (uint8_t*)data_transmit, strlen(data_transmit), 0xFFFF);
+		HAL_UART_Transmit(&huart6, (uint8_t*)data_transmit, strlen(data_transmit), 0xFFFF);
 
     	osDelay(task3_period);
 	}
 }
 
-/* Task 4 : Distance Sensor Reading -------------------------------------------------------------*/
+/* Task 4 : Magnetic Encoder Reading -------------------------------------------------------------*/
 //now just update distance value regularly
 void task4Function(void const * argument)
 {
-	uint32_t distance = 10000;
 	uint32_t *q_ptr; // pointer to data structure
+	uint32_t angle = 0;
+	uint16_t new_encoder = 0;
+	uint8_t test[2] = {0};
 
 	while(1)
 	{
 
-		// Update Values of Voltage, Current and Counter
-		distance++;
+		// SPI reading done manually, following requirement from datasheet
 
-		// Write Voltage, Current and Counter to
+		new_encoder = read_encoder();
+
+		//further processing of the encoder data, angle = encoder
+		encoder = new_encoder;
+		angle = encoder;
+
+		/* SPI hasn't work yet */
+//		HAL_SPI_Receive(&hspi2, test , 1, (uint32_t)0xFFFF);
+//		new_encoder = test[1];
+//		angle = new_encoder;
+
+		// Write Distance to
 		q_ptr = osPoolAlloc(distance_pool); //allocate memory out of the 16 available to keep this data
-		*q_ptr = distance;
+		*q_ptr = angle;
 		osMessagePut(distance_queue, (uint32_t)q_ptr, osWaitForever);
 
 		osDelay(task4_period);
-
 	}
+}
+
+/* AEAT-6012 Encoder Serial Synchronous Interface */
+/* initiate encoder */
+void encoder_init(void)
+{
+	encoder = read_encoder();
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Slave Select (SS) - Disable AEAT-6012 when pin is high
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET); //Enable Clock (SCK)
+}
+
+/* Obtain current encoder reading
+ * the only downside is that clock period is very slow i.e. 2 ms because we are using Systick interrupt every 1 ms
+ * but with SPI library cannot control time between sampling
+ */
+uint16_t read_encoder(void)
+{
+	uint16_t encoder = 0;
+
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET); //Slave Select (SS) - Enable AEAT-6012 when pin is high
+	HAL_Delay(1); //give delay of at least 500 ns
+
+	for (uint8_t i = 0; i < 12; i++)
+	{
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
+		HAL_Delay(1);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
+		HAL_Delay(1);
+		encoder = (encoder << 1) | HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_10);
+	}
+
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); //Slave Select (SS) - Disable AEAT-6012 when pin is high
+
+	return encoder;
 }
 
 
@@ -329,17 +395,29 @@ void MX_GPIO_Init(void)
 	  GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
 	  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-	  /* EXTI interrupt init*/
-	  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
-	  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-
-
-	  /*Configure GPIO pins : PA5 PA6 */
-	  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6;
+	  /*Configure GPIO pins : PA5 PA6 PA8 */
+	  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_8;
 	  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
 	  GPIO_InitStruct.Pull = GPIO_NOPULL;
 	  GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
 	  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+	  /*Configure GPIO pin : PB10 */
+	  GPIO_InitStruct.Pin = GPIO_PIN_10;
+	  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+	  GPIO_InitStruct.Pull = GPIO_NOPULL;
+	  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+	  /*Configure GPIO pin : PB4 */
+	  GPIO_InitStruct.Pin = GPIO_PIN_4;
+	  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	  GPIO_InitStruct.Pull = GPIO_NOPULL;
+	  GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
+	  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+	  /* EXTI interrupt init*/
+	  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
+	  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 }
 
 /* USART2 init function -------------------------------------------------------------------- */
@@ -405,7 +483,45 @@ void MX_I2C1_Init(void)
 
 }
 
+/* SPI2 init function */
+void MX_SPI2_Init(void)
+{
+
+  hspi2.Instance = SPI2;
+  hspi2.Init.Mode = SPI_MODE_MASTER;
+  hspi2.Init.Direction = SPI_DIRECTION_2LINES_RXONLY;
+  hspi2.Init.DataSize = SPI_DATASIZE_16BIT;
+  hspi2.Init.CLKPolarity = SPI_POLARITY_HIGH;
+  hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi2.Init.NSS = SPI_NSS_HARD_OUTPUT;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi2.Init.TIMode = SPI_TIMODE_DISABLED;
+  hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLED;
+  hspi2.Init.CRCPolynomial = 10;
+  HAL_SPI_Init(&hspi2);
+
+}
+
+/* USART6 init function */
+void MX_USART6_UART_Init(void)
+{
+
+  huart6.Instance = USART6;
+  huart6.Init.BaudRate = 115200;
+  huart6.Init.WordLength = UART_WORDLENGTH_8B;
+  huart6.Init.StopBits = UART_STOPBITS_1;
+  huart6.Init.Parity = UART_PARITY_NONE;
+  huart6.Init.Mode = UART_MODE_TX_RX;
+  huart6.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart6.Init.OverSampling = UART_OVERSAMPLING_16;
+  HAL_UART_Init(&huart6);
+
+}
+
+
 /* additional code from STM32 */
 #ifdef USE_FULL_ASSERT
 void assert_failed(uint8_t* file, uint32_t line)
 #endif
+

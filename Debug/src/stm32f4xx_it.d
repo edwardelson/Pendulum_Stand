@@ -25,6 +25,7 @@ src/stm32f4xx_it.o: ../src/stm32f4xx_it.c \
  ../system/include/stm32f4xx/stm32f4xx_hal_i2c_ex.h \
  ../system/include/stm32f4xx/stm32f4xx_hal_pwr.h \
  ../system/include/stm32f4xx/stm32f4xx_hal_pwr_ex.h \
+ ../system/include/stm32f4xx/stm32f4xx_hal_spi.h \
  ../system/include/stm32f4xx/stm32f4xx_hal_uart.h \
  ../include/stm32f4xx_it.h ../system/include/FreeRTOS/cmsis_os.h \
  ../system/include/FreeRTOS/FreeRTOS.h \
@@ -92,6 +93,8 @@ src/stm32f4xx_it.o: ../src/stm32f4xx_it.c \
 ../system/include/stm32f4xx/stm32f4xx_hal_pwr.h:
 
 ../system/include/stm32f4xx/stm32f4xx_hal_pwr_ex.h:
+
+../system/include/stm32f4xx/stm32f4xx_hal_spi.h:
 
 ../system/include/stm32f4xx/stm32f4xx_hal_uart.h:
 

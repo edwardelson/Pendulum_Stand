@@ -24,6 +24,7 @@ src/main.o: ../src/main.c ../system/include/stm32f4xx/stm32f4xx_hal.h \
  ../system/include/stm32f4xx/stm32f4xx_hal_i2c_ex.h \
  ../system/include/stm32f4xx/stm32f4xx_hal_pwr.h \
  ../system/include/stm32f4xx/stm32f4xx_hal_pwr_ex.h \
+ ../system/include/stm32f4xx/stm32f4xx_hal_spi.h \
  ../system/include/stm32f4xx/stm32f4xx_hal_uart.h \
  ../system/include/stm32f4xx/stm32f4xx_hal_pwr_ex.h \
  ../system/include/stm32f4xx/stm32f4xx_hal_flash_ex.h \
@@ -93,6 +94,8 @@ src/main.o: ../src/main.c ../system/include/stm32f4xx/stm32f4xx_hal.h \
 ../system/include/stm32f4xx/stm32f4xx_hal_pwr.h:
 
 ../system/include/stm32f4xx/stm32f4xx_hal_pwr_ex.h:
+
+../system/include/stm32f4xx/stm32f4xx_hal_spi.h:
 
 ../system/include/stm32f4xx/stm32f4xx_hal_uart.h:
 

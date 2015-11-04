@@ -25,6 +25,7 @@ src/Devices/tmp006.o: ../src/Devices/tmp006.c ../include/tmp006.h \
  ../system/include/stm32f4xx/stm32f4xx_hal_i2c_ex.h \
  ../system/include/stm32f4xx/stm32f4xx_hal_pwr.h \
  ../system/include/stm32f4xx/stm32f4xx_hal_pwr_ex.h \
+ ../system/include/stm32f4xx/stm32f4xx_hal_spi.h \
  ../system/include/stm32f4xx/stm32f4xx_hal_uart.h
 
 ../include/tmp006.h:
@@ -82,5 +83,7 @@ src/Devices/tmp006.o: ../src/Devices/tmp006.c ../include/tmp006.h \
 ../system/include/stm32f4xx/stm32f4xx_hal_pwr.h:
 
 ../system/include/stm32f4xx/stm32f4xx_hal_pwr_ex.h:
+
+../system/include/stm32f4xx/stm32f4xx_hal_spi.h:
 
 ../system/include/stm32f4xx/stm32f4xx_hal_uart.h:
