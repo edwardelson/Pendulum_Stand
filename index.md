@@ -1,4 +1,4 @@
-#ABSTRACT
+# ABSTRACT
 Pendulum Thrust Stand is a device to measure the thrust of a satellite micropropulsion system in the scale of micro-Newton. The output thrust can be modeled by a second order equation of the oscillation amplitude vs time.  
 
 ![Pendulum Thrust Stand](https://dl.dropboxusercontent.com/s/okluw5jq0ug7b26/thrust2.jpg?dl=0)  
